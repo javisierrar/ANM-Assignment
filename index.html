@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <title>ANM Assignment</title>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <style>
+      /* Always set the map height explicitly to define the size of the div
+       * element that contains the map. */
+      #map {
+        height: 100%;
+      }
+      /* Optional: Makes the sample page fill the window. */
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      #floating-panel {
+        position: absolute;
+        top: 10px;
+        left: 25%;
+        z-index: 5;
+        background-color: #fff;
+        padding: 5px;
+        border: 1px solid #999;
+        text-align: center;
+        font-family: 'Roboto','sans-serif';
+        line-height: 30px;
+        padding-left: 10px;
+      }
+    </style>
+      
+  </head>
+  <body>
+    <div id="floating-panel">
+      <input id="address" type="textbox" value="Sydney, NSW">
+      <input id="submit" type="button" value="Submit">
+    </div>
+    <div id="map"></div>
+    <div class="panel panel-primary">
+      <div class="panel-heading">
+        <h3 class="panel-title">Top 10 Earthquakes in the world:</h3>
+      </div>
+      <div class="panel-body"> 
+            <table class="table">
+                <tr>
+                    <th>Magnitude</th>
+                    <th>Date</th>
+                    <th>latitude</th>
+                    <th>longitude</th>
+                </tr>
+            </table>
+      </div>
+    </div>
+  </body>
+</html>
+    <script>
+        /*Load top 10 earthquakes in the world the past 12 months*/
+      $(document).ready(function(){
+          //format date as needed
+          var today = new Date();
+          var dd = today.getDate();
+          mm = today.getMonth()+1; 
+          yyyy = today.getFullYear();
+          today = yyyy+'-'+mm+'-'+dd;
+          //Ajax call to get the top 10 earthquakes
+          $.ajax({
+              url:"http://api.geonames.org/earthquakesJSON?north=90&south=-90&east=180&west=-180&date="+ today+"&username=javisierrar",
+              type: "GET",
+              contentType: "application/x-www-form-urlencoded",
+              success: function(jsonReceived){
+                  var earthquakes = jsonReceived
+                  var top10 = [];
+                  for(var i = 0; i<earthquakes.earthquakes.length; i++){
+                      var earthquake = earthquakes.earthquakes[i];
+                      top10.push(earthquake);
+                  }
+                  var earthData = "";
+                  //Append Top 10 earthquake data to table
+                  for(var i= 0; i<10; i++){
+                    
+                    earthData += "<tr>";
+                    earthData += "<td>" + top10[i].magnitude + "</td>";
+                    earthData += "<td>" + top10[i].datetime + "</td>";
+                    earthData += "<td>" + top10[i].lat + "</td>";
+                    earthData += "<td>" + top10[i].lng + "</td>";
+                    earthData += "</tr>";    
+                  }
+                  $(".table").find("tbody").append(earthData);
+              },
+              error: function(){
+                   alert("Error: Can't establish conection with WebService");
+               }
+          });
+      });    
+      function initMap() {
+        //Initialize google maps with default location (Sidney)
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 8,
+          center: {lat: -34.397, lng: 150.644}
+        });
+        var geocoder = new google.maps.Geocoder();
+
+        document.getElementById('submit').addEventListener('click', function() {
+          geocodeAddress(geocoder, map);
+        });
+      }
+        
+      function geocodeAddress(geocoder, resultsMap) {
+        var address = document.getElementById('address').value;
+        geocoder.geocode({'address': address}, function(results, status) {
+          if (status === 'OK') {
+            resultsMap.setCenter(results[0].geometry.location);
+            //Get bounding box coordinates for input city
+            var west = results[0].geometry.bounds.b.b;
+            var east = results[0].geometry.bounds.b.f;
+            var south = results[0].geometry.bounds.f.b;
+            var north = results[0].geometry.bounds.f.f;
+            //ajax calls to get nearby earthquakes from bounding box  
+            $.ajax({
+               url: "http://api.geonames.org/earthquakesJSON?north=" + north + "&south=" + south + "&east=" + east + "&west=" + west +      "&username=javisierrar",
+               type: "GET",
+               contentType: "application/x-www-form-urlencoded",
+                success: function(jsonReceived){
+                   //Add markers for returned JSON
+                   var earthquakes = jsonReceived;
+                   var arrEarth = earthquakes['earthquakes'];
+                   var markers = [];
+                   for(var i = 0; i < arrEarth.length; i++){
+                       var earthquake = arrEarth[i];
+                       //Info Window for each marker
+                       var contentString = '<div id="content">'+
+                           '<div id="siteNotice">'+
+                           '<div>' +
+                           '<h1 id="firstHeading" class="firstHeading">Date: '+ earthquake.datetime +'</h1>' +
+                           '<div id="bodyContent">' +
+                           '<p><b> Magnitude: </b>' + earthquake.magnitude + '</p>' + 
+                           '<p><b>Depth: </b>' + earthquake.depth + '</p>' +
+                           '</div>' +
+                           '</div>' +
+                           '</div>';
+                       //Create a marker for each returned JSON
+                       var marker = new google.maps.Marker({
+                           position: {lat: earthquake.lat, lng: earthquake.lng},
+                           map: resultsMap,
+                           title: earthquake[i]
+                       })
+                       markers.push(marker);
+                       markers[i].infowindow = new google.maps.InfoWindow({
+                          content: contentString 
+                       });
+                       //create click listener for each marker clicked to show Info Window
+                       google.maps.event.addListener(markers[i], 'click', function(){
+                           this.infowindow.open(map,this);
+                       });
+                   }
+               },
+               error: function(){
+                   alert("Error: Can't establish conection with WebService");
+               }
+            });
+          } else {
+            alert('Geocode was not successful for the following reason: ' + status);
+          }
+        });
+      }
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA5yA1LX-79pj7HW570JJFLuNK4fCiXYwY&callback=initMap">
+    </script>
